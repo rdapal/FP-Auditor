@@ -2,18 +2,156 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>FP-Auditor: 2026 Browser FingerPrinting Defense Stress-Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FP-Auditor | Browser Defense Matrix</title>
     <style>
-        body { font-family: monospace; background: #121212; color: #00ff00; padding: 20px; }
-        #results { background: #1e1e1e; padding: 15px; border-radius: 5px; margin-top: 20px;}
+        :root {
+            --bg-color: #0d1117;
+            --panel-bg: #161b22;
+            --text-main: #c9d1d9;
+            --text-muted: #8b949e;
+            --border: #30363d;
+            --accent-blue: #58a6ff;
+            --success-green: #3fb950;
+            --danger-red: #f85149;
+        }
+
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 2rem;
+            line-height: 1.6;
+        }
+
+        header {
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            color: var(--accent-blue);
+            margin: 0;
+            font-size: 1.8rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        #dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .module-card {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .module-card h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            border-bottom: 1px dashed var(--border);
+            padding-bottom: 0.5rem;
+        }
+
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(48, 54, 61, 0.5);
+            padding-bottom: 0.25rem;
+        }
+
+        .label { font-weight: bold; color: var(--text-muted); }
+        
+        .status-success { color: var(--success-green); }
+        .status-blocked { color: var(--danger-red); font-weight: bold; }
+        .hash-value { font-size: 0.85rem; word-break: break-all; color: var(--accent-blue); }
+
+        #global-status {
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background: rgba(88, 166, 255, 0.1);
+            border-left: 4px solid var(--accent-blue);
+        }
     </style>
 </head>
 <body>
-    <h1>FP-Auditor: Browser Defense Matrix</h1>
-    <p>Testing API restrictions, content blocking, and data spoofing...</p>
-    
-    <div id="results"></div>
 
-    <script type="module" src="./src/core/main.js"></script>
+    <header>
+        <h1>FP-Auditor</h1>
+        <div class="subtitle">2026 Browser Defense Stress-Test Matrix // Local Execution</div>
+    </header>
+
+    <div id="global-status">Initializing fingerprinting modules...</div>
+
+    <div id="dashboard">
+        </div>
+
+    <script type="module">
+        import { getCanvasFingerprint } from './src/probes/canvas.js';
+        import { getAudioFingerprint } from './src/probes/audio.js';
+        import { getHardwareFingerprint } from './src/probes/hardware.js';
+
+        async function runAudit() {
+            const dashboard = document.getElementById('dashboard');
+            const statusBox = document.getElementById('global-status');
+            
+            statusBox.innerText = "Executing payloads...";
+
+            const [canvas, audio, hw] = await Promise.all([
+                getCanvasFingerprint(),
+                getAudioFingerprint(),
+                getHardwareFingerprint()
+            ]);
+
+            // Helper to format rows
+            const row = (label, val, isHash = false) => {
+                const safeVal = String(val); // Convert numbers/objects to strings
+                const statusClass = isHash ? 'hash-value' : (safeVal.includes('blocked') ? 'status-blocked' : 'status-success');
+                return `
+                    <div class="data-row">
+                        <span class="label">${label}</span>
+                        <span class="${statusClass}">${safeVal}</span>
+                    </div>`;
+            };
+
+            dashboard.innerHTML = `
+                <div class="module-card">
+                    <h2>Module A: Rendering & Audio Vectors</h2>
+                    ${row('Canvas API Status', canvas.status)}
+                    ${row('Canvas Hash', canvas.hash || `[BLOCKED] ${canvas.error}`, true)}
+                    ${row('AudioContext Status', audio.status)}
+                    ${row('AudioContext Hash', audio.hash || `[BLOCKED] ${audio.error}`, true)}
+                </div>
+
+                <div class="module-card">
+                    <h2>Module B/C: Hardware & Functionality</h2>
+                    ${row('CPU Cores', hw.data?.cores || 'blocked')}
+                    ${row('Device Memory (GB)', hw.data?.memory || 'blocked')}
+                    ${row('Screen Resolution', hw.data?.screenResolution || 'blocked')}
+                    ${row('Color Depth', hw.data?.colorDepth || 'blocked')}
+                    ${row('Geo-Permission', hw.data?.permissions?.geolocation || 'blocked')}
+                    ${row('Notif-Permission', hw.data?.permissions?.notifications || 'blocked')}
+                </div>
+            `;
+
+            statusBox.innerHTML = "<span class='status-success'>Audit Complete. Check console for raw payload data.</span>";
+            console.log("--- FP-AUDITOR RAW PAYLOAD ---", { canvas, audio, hw });
+        }
+
+        window.addEventListener('DOMContentLoaded', runAudit);
+    </script>
 </body>
 </html>
