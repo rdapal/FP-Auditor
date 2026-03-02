@@ -103,6 +103,7 @@
         import { getCanvasFingerprint } from './src/probes/canvas.js';
         import { getAudioFingerprint } from './src/probes/audio.js';
         import { getHardwareFingerprint } from './src/probes/hardware.js';
+        import { getTimingFingerprint } from './src/probes/timing.js';
 
         async function runAudit() {
             const dashboard = document.getElementById('dashboard');
@@ -110,10 +111,11 @@
             
             statusBox.innerText = "Executing payloads...";
 
-            const [canvas, audio, hw] = await Promise.all([
+            const [canvas, audio, hw, timing] = await Promise.all([
                 getCanvasFingerprint(),
                 getAudioFingerprint(),
-                getHardwareFingerprint()
+                getHardwareFingerprint(),
+                getTimingFingerprint()
             ]);
 
             // Helper to format rows
@@ -144,6 +146,12 @@
                     ${row('Color Depth', hw.data?.colorDepth || 'blocked')}
                     ${row('Geo-Permission', hw.data?.permissions?.geolocation || 'blocked')}
                     ${row('Notif-Permission', hw.data?.permissions?.notifications || 'blocked')}
+                </div>
+
+                <div class="module-card">
+                    <h2>Module C: Algorithmic Timing</h2>
+                    ${row('Execution Latency', timing.data?.executionLatency || 'blocked')}
+                    ${row('DOM Interactive Time', timing.data?.domInteractive || 'blocked')}
                 </div>
             `;
 
