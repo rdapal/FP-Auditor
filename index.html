@@ -157,6 +157,9 @@
 
             statusBox.innerHTML = "<span class='status-success'>Audit Complete. Check console for raw payload data.</span>";
             console.log("--- FP-AUDITOR RAW PAYLOAD ---", { canvas, audio, hw });
+
+            // expose our payload to the window object for Playwright to grab
+            window.fpPayload = { canvas, audio, hw, timing };
         }
 
         window.addEventListener('DOMContentLoaded', runAudit);
