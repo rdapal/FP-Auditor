@@ -1,64 +1,74 @@
 const { chromium, firefox } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const TARGET_URL = 'http://localhost:8000';
+const RESULTS_FILE = './results_matrix.json';
 
-// Experimental extension variatons
+// Experimental extension variations
 async function runBrowserAudit(browserType, launchOptions, profileName, isExtension = false) {
     console.log(`\n[+] Launching Profile: ${profileName}...`);
     
     let browserContext;
+    let browser;
     let page;
 
-    if (isExtension) {
-        // For extensions we require a persistent context
-        const userDataDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'playwright-'));
-        browserContext = await chromium.launchPersistentContext(userDataDir, launchOptions);
-        page = browserContext.pages()[0] || await browserContext.newPage();
-    } else {
-        const browser = await browserType.launch(launchOptions);
-        browserContext = await browser.newContext();
-        page = await browserContext.newPage();
-    }
+    try {
+        if (isExtension) {
+            // For extensions we require a persistent context
+            const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'playwright-'));
+            browserContext = await chromium.launchPersistentContext(userDataDir, launchOptions);
+            page = browserContext.pages().length > 0 ? browserContext.pages()[0] : await browserContext.newPage();
+        } else {
+            browser = await browserType.launch(launchOptions);
+            browserContext = await browser.newContext();
+            page = await browserContext.newPage();
+        }
 
-    await page.goto(TARGET_URL);
-    await page.waitForSelector('.status-success', { timeout: 10000 });
-    const rawPayload = await page.evaluate(() => window.fpPayload);
-    
-    if (isExtension) {
-        await browserContext.close();
-    } else {
-        await browserContext.browser().close();
+        await page.goto(TARGET_URL, { waitUntil: 'networkidle' });
+        
+        // Poll the window object
+        await page.waitForFunction(() => window.fpPayload !== undefined, { timeout: 15000 });
+        
+        const rawPayload = await page.evaluate(() => window.fpPayload);
+        console.log(`[SUCCESS] ${profileName} Audit Complete.`);
+        
+	// Return our payload and reset the var for next audit 
+        return { profile: profileName, data: rawPayload || null };
+
+    } catch (error) {
+        console.error(`[!] Error auditing ${profileName}:`, error.message);
+        // maintain matrix struct on failure
+        return { profile: profileName, data: null, error: error.message };
+    } finally {
+        // close open contexts depending on how they were launched
+        if (isExtension && browserContext) {
+            await browserContext.close();
+        } else if (browser) {
+            await browser.close();
+        }
     }
-    
-    console.log(`[SUCCESS] ${profileName} Audit Complete.`);
-    return { profile: profileName, data: rawPayload };
 }
 
 async function executeMatrix() {
+    console.log('[*] Starting FP-Auditor Automation Matrix...');
     const results = [];
 
-    // 1. Vanilla Chromium
     results.push(await runBrowserAudit(chromium, { headless: true }, 'Chromium_Vanilla'));
-
-    // 2. Vanilla Firefox
     results.push(await runBrowserAudit(firefox, { headless: true }, 'Firefox_Vanilla'));
-
-    // 3. Hardened Firefox
+    
     results.push(await runBrowserAudit(firefox, { 
         headless: true,
         firefoxUserPrefs: { 'privacy.resistFingerprinting': true, 'webgl.disabled': true }
     }, 'Firefox_Hardened'));
 
-    // 4. Simulated Brave (Strict Tracking Protection via flags)
     results.push(await runBrowserAudit(chromium, { 
         headless: true,
         args: ['--disable-reading-from-canvas', '--disable-webaudio'] 
     }, 'Chromium_Simulated_Brave'));
 
-    // 5. Chromium + uBlock Origin (requires path to unzipped extension)
-    const pathToExtension = require('path').join(__dirname, '../../uBlock0.chromium'); 
+    const pathToExtension = path.join(__dirname, '../../uBlock0.chromium'); 
     if (fs.existsSync(pathToExtension)) {
         results.push(await runBrowserAudit(chromium, {
             headless: false, // Extensions often require headful mode
@@ -71,8 +81,8 @@ async function executeMatrix() {
         console.log('\n[!] Skipping uBlock test: Extension folder not found.');
     }
 
-    fs.writeFileSync('./results_matrix.json', JSON.stringify(results, null, 2));
-    console.log('\n[!] Audit Matrix saved to results_matrix.json');
+    fs.writeFileSync(RESULTS_FILE, JSON.stringify(results, null, 2));
+    console.log(`\n[*] Audit Matrix saved to ${RESULTS_FILE}`);
 }
 
 executeMatrix().catch(console.error);
