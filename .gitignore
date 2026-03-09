@@ -1,5 +1,15 @@
+# Dependencies
 node_modules/
-.env
+extensions/
 
-# Research Outputs
+# Generated Output
 results_matrix.json
+docs/
+
+# Python Cache
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store

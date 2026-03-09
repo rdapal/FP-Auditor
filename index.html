@@ -96,8 +96,7 @@
 
     <div id="global-status">Initializing fingerprinting modules...</div>
 
-    <div id="dashboard">
-        </div>
+    <div id="dashboard"></div>
 
     <script type="module">
         import { getCanvasFingerprint } from './src/probes/canvas.js';
@@ -120,7 +119,7 @@
 
             // Helper to format rows
             const row = (label, val, isHash = false) => {
-                const safeVal = String(val); // Convert numbers/objects to strings
+                const safeVal = String(val); 
                 const statusClass = isHash ? 'hash-value' : (safeVal.includes('blocked') ? 'status-blocked' : 'status-success');
                 return `
                     <div class="data-row">
@@ -156,9 +155,9 @@
             `;
 
             statusBox.innerHTML = "<span class='status-success'>Audit Complete. Check console for raw payload data.</span>";
-            console.log("--- FP-AUDITOR RAW PAYLOAD ---", { canvas, audio, hw });
+            console.log("--- FP-AUDITOR RAW PAYLOAD ---", { canvas, audio, hw, timing });
 
-            // expose our payload to the window object for Playwright to grab
+            // expose the finalized payload to window
             window.fpPayload = { canvas, audio, hw, timing };
         }
 
