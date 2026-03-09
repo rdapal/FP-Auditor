@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Generated Output
+results_matrix.json
+docs/
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
