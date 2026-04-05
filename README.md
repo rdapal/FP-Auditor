@@ -1,103 +1,79 @@
+# 🕵️‍♂️ FP-Auditor: Browser Fingerprinting Defense Matrix
 
-## 🎯 Motivation
+![Node.js](https://img.shields.io/badge/Node.js-Playwright-339933?logo=nodedotjs&logoColor=white)
+![Python](https://img.shields.io/badge/Python-Data_Viz-3776AB?logo=python&logoColor=white)
+![Security](https://img.shields.io/badge/Security-Tracking_Prevention-red)
 
-In the paper "Fingerprinting the Fingerprinters", the authors establish that fingerprinting is an invasive, stateless tracking technique. They highlight a fundamental tension in browser security: "Existing browser fingerprinting countermeasures can be classified into two categories: content blocking and API restriction". Content blocking is prone to breakage when multi-purpose scripts are used, while API restriction provides reliable protection but can break legitimate website functionality.
+An automated honeypot and auditing matrix designed to empirically measure how modern browser engines (Chromium, WebKit, Gecko) defend against stateless fingerprinting tracking techniques.
 
-While the original paper focused on measuring how often websites *deploy* fingerprinting scripts (finding it on 10.18% of the top 100K websites), this analysis flips the perspective. In this study, we measure how modern browser engines in 2026 (Chromium, Gecko/Firefox, and WebKit/Safari) *defend* against common collection techniques utilized for fingerprinting users. Utilizing a local honeypot, we stress-test whether browsers rely on content blocking, API restriction, or hardware spoofing, and evaluate the effectiveness of these defenses.
+## 🚀 Overview
+Modern web tracking has evolved beyond cookies into stateless "fingerprinting"—extracting device-specific hardware and rendering quirks to uniquely identify users. Existing browser defenses rely on either **Content Blocking** (which breaks on unknown domains) or **API Restriction** (which breaks legitimate site functionality).
 
-<br/>
+**FP-Auditor** acts as a local telemetry honeypot. It deploys known fingerprinting heuristics (Canvas, AudioContext, CPU profiling) and uses headless browser automation to stress-test how different browser profiles react to data extraction attempts.
 
-## 📏 Methodology
+## 🧰 Architecture & Probes
 
-To ensure a highly controlled environment, we built a local automated data collection honeypot (`FP-Auditor`).
+The suite orchestrates a multi-language pipeline to extract and visualize browser telemetry:
 
-### 1. Honeypot Engineering (The Attack Surface)
-A local JavaScript environment was built to deploy the exact fingerprinting heuristics defined in the paper:
-* **Rendering Vectors:** Utilizing the `Canvas` and `AudioContext` APIs to extract mathematical rendering variances.
-* **Functionality & Hardware Probing:** Querying `navigator.hardwareConcurrency` and memory APIs to profile the host machine.
-* **Algorithmic Timing:** Using the `Performance` API to measure execution latency, enabling CPU tier profiling.
+* **The Orchestrator (`src/core/audit.js`):** A Node.js Playwright matrix that systematically launches 6 distinct browser profiles (Vanilla Chromium, WebKit/Safari, Hardened Firefox, Incognito, and uBlock-enabled profiles).
+* **The Honeypot (`src/probes/`):** A modular JavaScript environment executing state-of-the-art tracking vectors:
+  * **Rendering Vectors:** `canvas.js` and `audio.js` extract mathematical rendering variances.
+  * **Hardware Probing:** `hardware.js` queries `navigator.hardwareConcurrency` and memory APIs.
+  * **Algorithmic Timing:** `timing.js` uses the `Performance` API to measure execution latency for CPU tiering.
+* **The Visualizer (`visualize.py`):** A Matplotlib pipeline that translates the extracted JSON payload matrix into comparative visualizations.
 
-### 2. Browser Automation Matrix
-We utilized **Microsoft Playwright** to orchestrate an automated testing matrix across six distinct browser profiles, capturing the exact payload leaked to the tracker:
-1.  `Chromium_Vanilla` (Baseline)
-2.  `Firefox_Vanilla` (Baseline)
-3.  `WebKit_Safari` (Testing Apple's claim to enhanced browsing privacy)
-4.  `Firefox_Hardened` (Strict API restriction via `privacy.resistFingerprinting`)
-5.  `Chromium_Incognito` (Testing isolated sessions)
-6.  `Chromium_uBlock` (Testing extension-based content blocking)
+---
 
-<br/>
+## 📊 Empirical Findings
 
-## 📊 Summary of Results
+Our automated audits reveal the exact mechanisms—and failures—of modern browser defenses:
 
-Our findings successfully validate the paper's claims regarding the friction between API restriction and content blocking.
-
-### Hardware Spoofing (Functionality Probing)
-
+### 1. Hardware Spoofing (Functionality Probing)
+Standard browsers leak the host machine's exact CPU core count. Privacy-focused engines actively spoof this data to blend the user into a generic hardware pool (e.g., Safari capping at 8 cores, Hardened Firefox capping at 4 cores).
 ![Hardware Spoofing: Reported CPU Cores](./docs/plot_cores.png)
 
-Probing for hardware functionality shows some notable leakage variation. Our host machine utilizes a 20-core CPU. 
-* **Vanilla & Incognito** profiles leaked the true 20-core architecture. 
-* **WebKit (Safari)** actively spoofed the response, capping the reported hardware at 8 cores to blend the user into a generic Mac/PC pool.
-* **Firefox Hardened** most agressive spoofing, capping the reported hardware at 4 cores.
-
-### Rendering Vectors & Content Blocking Failures
-
+### 2. Content Blocking Failures (Rendering Vectors)
+Standard ad-blockers (like uBlock Origin) rely on domain blacklists. Because our honeypot runs on `localhost` (an unknown domain), content blocking completely fails to stop Canvas API extraction. Only strict API Restriction (Firefox Hardened) successfully intercepts the payload.
 ![Rendering Vectors: Canvas Payload Size](./docs/plot_canvas.png)
 
-This metric exposes the flaw in content blocking mentioned in the paper, specifically because our honeypot runs on `localhost` (an unknown domain, not on an ad-blocker list) 
-* **uBlock Origin** completely failed to block the Canvas API, leaking a full ~17KB payload due to the domain not being included in any domain lists. 
-* **Incognito mode** offered zero protection against stateless API access as it's simply a session without saving any data.
-* **Firefox Hardened** is the only profile that successfully mitigated the attack via total **API Restriction**, blocking the data extraction and reducing the payload to a ~2KB blank footprint.
-
-### Algorithmic Defense (Timing Variation)
-
+### 3. Algorithmic Defense (Execution Latency)
+To defeat CPU-timing attacks, Hardened Firefox artificially rounds the JavaScript performance clock to 16.67ms (matching 60Hz VSync). This successfully destroys the fingerprinting vector but breaks legitimate performance debugging for web developers.
 ![Algorithmic Defense: Execution Latency Variation](./docs/plot_timing.png)
 
-Algorithmic fingerprinting measures execution differences to profile users.
-* Vanilla browsers allowed highly precise execution times (e.g 7.60ms to 13.90ms), allowing the website to confidently profile the CPU speed.
-* **Firefox Hardened** defended against this by introducing some latency variation, artificially rounding the clock to **16.67ms** (matching a 60Hz VSync). While this effectively destroys timing attacks, it perfectly illustrates the paper's thesis that this countermeasure breaks legitimate performance debugging for web developers, as execution performance data is totally obfuscated.
+---
 
-<br/>
+## ⚙️ Installation & Usage
 
-## 📁 Project
+### Prerequisites
+* Node.js (v18+)
+* Python 3.10+ (with `matplotlib`)
 
-### Project Structure
-```text
-fp-auditor/
-├── index.html              # The honeypot dashboard
-├── src/
-│   ├── probes/             # Canvas, Audio, Hardware, and Timing payloads
-│   └── core/
-│       └── audit.js        # Playwright automation matrix script
-├── visualize.py            # Matplotlib data visualization plotting script
-├── results_matrix.json     # Raw data output from the audit
-└── docs/                   # Generated PNG plots
-
-### Usage
-1. Initalize the Node envrionment and install PlayWright:
+### 1. Setup the Environment
 ```bash
+git clone [https://github.com/yourusername/fp-auditor.git](https://github.com/yourusername/fp-auditor.git)
+cd fp-auditor
 npm install playwright
 npx playwright install webkit
 ```
 
-2. Start the local honeypot server:
+### 2. Launch the Honeypot
+Start the local server to host the fingerprinting probes:
 ```bash
 python3 -m http.server 8000
 ```
 
-3. Execute the auditing script to generate our results matrix (in a seperate terminal):
+### 3. Execute the Automated Audit Matrix
+In a separate terminal, run the Playwright orchestrator to gather the telemetry:
 ```bash
 node src/core/audit.js
 ```
+*(This will generate a `results_matrix.json` file in the root directory).*
 
-4. Generate the analysis plots:
+### 4. Generate Visualizations
+Parse the JSON payload and generate the comparative PNG plots:
 ```bash
 python3 visualize.py
 ```
-<br/>
 
-## 📚 References
-
-**[1]** Umar Iqbal, Steven Englehardt, and Zubair Shafiq. 2020. Fingerprinting the Fingerprinters: Learning to Detect Browser Fingerprinting Behaviors. CoRR abs/2008.04480, (2020). Retrieved from https://arxiv.org/abs/2008.04480
-
+## 📝 Disclaimer
+This tool was developed for academic security research purposes. It is designed to evaluate browser defense mechanisms locally and should not be deployed on public-facing servers to track users.
